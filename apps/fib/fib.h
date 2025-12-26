@@ -70,34 +70,9 @@ void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncTyp
 }
 /// @endcond
 
-template class Runtime<FibArgs, Worker<FibArgs, FuncType> >;
-
-template<>
-Runtime<FibArgs, Worker<FibArgs, FuncType>>::Runtime(int numThreads){
-	for(int i = 0; i<numThreads; i++){
-		Worker<FibArgs, FuncType>* worker = new Worker<FibArgs, FuncType>(i);
-		workers.push_back(worker);
-	}
-	
-	for(int i = 0; i<numThreads; i++){
-		workers[i]->setWorkers(workers);
-	}
-}
-
 template<>
 void Runtime<FibArgs, Worker<FibArgs,FuncType>>::init(){
     ((Worker<FibArgs, FuncType>*)workers[0])->createNewSpawnFrameAndWriteArgs(FIB_INPUT, 0);
-}
-
-template<>
-void Runtime<FibArgs, Worker<FibArgs, FuncType>>::run(){
-    init();
-    for (auto w : workers) 
-    	w->start();
-    for (auto w : workers) 
-    	w->join();
-    for (auto w : workers)
-        w->printStats();
 }
 
 

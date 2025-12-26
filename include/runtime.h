@@ -32,4 +32,28 @@ public:
     void init();
 };
 
+// Generic template implementations
+template <typename A, typename B>
+Runtime<A, B>::Runtime(int numThreads) {
+    for(int i = 0; i < numThreads; i++) {
+        B* worker = new B(i);
+        workers.push_back(worker);
+    }
+    
+    for(int i = 0; i < numThreads; i++) {
+        workers[i]->setWorkers(workers);
+    }
+}
+
+template <typename A, typename B>
+void Runtime<A, B>::run() {
+    init();
+    for (auto w : workers) 
+        w->start();
+    for (auto w : workers) 
+        w->join();
+    for (auto w : workers)
+        w->printStats();
+}
+
 #endif

@@ -20,7 +20,7 @@
 #include "taskpool.h"
 #include "readyqueue.h"
 
-std::atomic<bool> exited[8];
+std::atomic<bool> exited[MAX_WORKERS];
 
 /**
  * @brief Represents a worker thread in the runtime.
@@ -337,17 +337,21 @@ struct alignas(64) Worker {
      * @brief Starts the worker thread.
      */
     void start() {
-        thread = std::thread(&Worker::workerLoop, this);
-        cpu_set_t cpuset;
-        CPU_ZERO(&cpuset);
-        int num_cpus = std::thread::hardware_concurrency();
-        CPU_SET(workerId % num_cpus, &cpuset);
+      thread = std::thread(&Worker::workerLoop, this);
 
-        int r = pthread_setaffinity_np(thread.native_handle(), sizeof(cpu_set_t),
-                                       &cpuset);
-        if (r != 0) {
-            perror("pthread_setaffinity_np");
-        }
+      int num_cpus = std::thread::hardware_concurrency();
+      if (num_cpus == 0)
+        num_cpus = 1;
+
+      cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(workerId % num_cpus, &cpuset);
+
+      int r = pthread_setaffinity_np(thread.native_handle(), sizeof(cpu_set_t),
+                                     &cpuset);
+      if (r != 0) {
+        fprintf(stderr, "pthread_setaffinity_np failed: %s\n", strerror(r));
+      }
     }
 };
 
