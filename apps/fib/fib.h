@@ -20,6 +20,10 @@ struct FibArgs{
 	Worker<FibArgs, FuncType>::Task* address;
 };
 
+extern bool PERFORM_VALIDATION;
+extern int FINAL_RESULT;
+
+/// @cond DOXYGEN_SKIP
 template<> 
 void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::spawn(int left, Worker<FibArgs, FuncType>::Task* address, int slot, int addressOwner, bool lastProducer){
 		if(left >= 2){
@@ -39,6 +43,13 @@ void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncTyp
 		return;
 }
 
+const int FIB_INPUT = 40;
+
+int serial_fib(int input) {
+    if (input < 2) return input;
+    return serial_fib(input - 1) + serial_fib(input - 2);
+}
+
 template<> 
 void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::sync(int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot, int addressOwner){
 		int sum = left + right;
@@ -51,11 +62,13 @@ void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncTyp
 		}
    		else{
    			std::cout<<"sum:"<<sum<<"\n";
+            FINAL_RESULT = sum;
    			exited[workerId].store(true, std::memory_order_relaxed);
    			std::atomic_thread_fence(std::memory_order_release);
    		}
    		return;
 }
+/// @endcond
 
 template class Runtime<FibArgs, Worker<FibArgs, FuncType> >;
 
@@ -73,7 +86,7 @@ Runtime<FibArgs, Worker<FibArgs, FuncType>>::Runtime(int numThreads){
 
 template<>
 void Runtime<FibArgs, Worker<FibArgs,FuncType>>::init(){
-    ((Worker<FibArgs, FuncType>*)workers[0])->createNewSpawnFrameAndWriteArgs(40, 0);
+    ((Worker<FibArgs, FuncType>*)workers[0])->createNewSpawnFrameAndWriteArgs(FIB_INPUT, 0);
 }
 
 template<>
@@ -83,6 +96,8 @@ void Runtime<FibArgs, Worker<FibArgs, FuncType>>::run(){
     	w->start();
     for (auto w : workers) 
     	w->join();
+    for (auto w : workers)
+        w->printStats();
 }
 
 
