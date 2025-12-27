@@ -12,7 +12,6 @@ template <typename FuncTy> struct alignas(64) Task {
   alignas(64) std::atomic<int32_t> remainingInputs{
       0};                  ///< Number of inputs this task is waiting for.
   int args[2];             ///< Arguments for the task function.
-  Task *__restrict__ next; ///< Pointer to the next task (used in queues).
   FuncTy funcType;         ///< The type of function to execute.
   Task *__restrict__ address{nullptr}; ///< Return address or parent task.
   int slot;         ///< Slot index in the parent task to write the result.

@@ -73,7 +73,7 @@ template <typename FuncTy> struct alignas(64) ReadyQueue {
    * @brief Pops a task from the steal queue (front) - used by thieves.
    * @return The popped task, or nullptr if empty.
    */
-  __attribute__((cold)) TaskType *steal_pop_front() {
+  __attribute__((hot)) TaskType *steal_pop_front() {
     if (back == front) {
       return nullptr;
     }

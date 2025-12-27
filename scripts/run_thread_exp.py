@@ -46,10 +46,17 @@ def parse_stats_output(filepath):
     total_tasks = 0
     total_attempts = 0
     total_successes = 0
+    comp_time = "N/A"
     
+    stats_found = False
     with open(filepath, 'r') as f:
         for line in f:
+            if "Computation Time:" in line:
+                match = re.search(r'Computation Time: (\d+\.\d+) seconds', line)
+                if match:
+                    comp_time = float(match.group(1))
             if "Tasks Executed" in line:
+                stats_found = True
                 # Worker 0: Tasks Executed = 32626652, Steal Attempts = 957, Steal Successes = 380
                 tasks = re.search(r'Tasks Executed = (\d+)', line)
                 attempts = re.search(r'Steal Attempts = (\d+)', line)
@@ -60,9 +67,10 @@ def parse_stats_output(filepath):
                 if successes: total_successes += int(successes.group(1))
                 
     return {
-        'tasks': total_tasks,
-        'attempts': total_attempts,
-        'successes': total_successes
+        'tasks': total_tasks if stats_found else "N/A",
+        'attempts': total_attempts if stats_found else "N/A",
+        'successes': total_successes if stats_found else "N/A",
+        'comp_time': comp_time
     }
 
 def get_system_info():
@@ -76,10 +84,11 @@ def generate_report(thread_counts, output_dir, baseline_dir=None):
     report = "# Performance Report\n\n"
     report += f"**System**: {get_system_info()}\n\n"
     
-    headers = ["Threads", "Time (s)", "Cache Misses", "Tasks Executed", "Steal Attempts", "Steal Successes", "Efficiency"]
+    headers = ["Threads", "Time (s)", "Comp Time (s)", "Cache Misses", "Tasks Executed", "Steal Attempts", "Steal Successes", "Efficiency"]
     if baseline_dir:
-        headers.insert(2, "Baseline (s)")
-        headers.insert(3, "Speedup")
+        headers.insert(3, "Base Comp (s)")
+        headers.insert(4, "Comp Speedup")
+        headers.insert(5, "Total Speedup")
         
     report += "| " + " | ".join(headers) + " |\n"
     report += "|" + "---|" * len(headers) + "\n"
@@ -94,22 +103,29 @@ def generate_report(thread_counts, output_dir, baseline_dir=None):
         perf = parse_perf_output(perf_path)
         stats = parse_stats_output(stats_path)
         
-        efficiency = (stats['successes'] / stats['attempts'] * 100) if stats['attempts'] > 0 else 0
+        efficiency = 0
+        if isinstance(stats['attempts'], (int, float)) and stats['attempts'] > 0:
+            efficiency = (stats['successes'] / stats['attempts'] * 100)
+        efficiency_str = f"{efficiency:.2f}%" if isinstance(stats['attempts'], (int, float)) else "N/A"
         
         row = [
             str(n),
             f"{perf.get('time', 'N/A')}",
-            f"{perf.get('cache_misses', 'N/A'):,}",
-            f"{stats['tasks']:,}",
-            f"{stats['attempts']:,}",
-            f"{stats['successes']:,}",
-            f"{efficiency:.2f}%"
+            f"{stats.get('comp_time', 'N/A')}",
+            f"{perf.get('cache_misses', 'N/A'):,}" if isinstance(perf.get('cache_misses'), (int, float)) else "N/A",
+            f"{stats['tasks']:,}" if isinstance(stats['tasks'], (int, float)) else "N/A",
+            f"{stats['attempts']:,}" if isinstance(stats['attempts'], (int, float)) else "N/A",
+            f"{stats['successes']:,}" if isinstance(stats['successes'], (int, float)) else "N/A",
+            efficiency_str
         ]
         
         if baseline_dir:
             base_perf_path = os.path.join(baseline_dir, f"thread_exp_{n}.txt")
+            base_stats_path = os.path.join(baseline_dir, f"thread_exp_{n}_stats.txt")
             base_time = "N/A"
-            speedup = "N/A"
+            base_comp = "N/A"
+            comp_speedup = "N/A"
+            total_speedup = "N/A"
             
             if os.path.exists(base_perf_path):
                 base_perf = parse_perf_output(base_perf_path)
@@ -117,10 +133,19 @@ def generate_report(thread_counts, output_dir, baseline_dir=None):
                     base_time = f"{base_perf['time']}"
                     if 'time' in perf and perf['time'] > 0:
                         speedup_val = base_perf['time'] / perf['time']
-                        speedup = f"{speedup_val:.2f}x"
+                        total_speedup = f"{speedup_val:.2f}x"
             
-            row.insert(2, base_time)
-            row.insert(3, speedup)
+            if os.path.exists(base_stats_path):
+                base_stats = parse_stats_output(base_stats_path)
+                if base_stats.get('comp_time') != "N/A":
+                    base_comp = f"{base_stats['comp_time']}"
+                    if stats.get('comp_time') != "N/A" and stats['comp_time'] > 0:
+                        speedup_val = base_stats['comp_time'] / stats['comp_time']
+                        comp_speedup = f"{speedup_val:.2f}x"
+            
+            row.insert(3, base_comp)
+            row.insert(4, comp_speedup)
+            row.insert(5, total_speedup)
             
         report += "| " + " | ".join(row) + " |\n"
         
@@ -139,6 +164,8 @@ def run_validation(exec_path, thread_counts):
         result = subprocess.run(command, capture_output=True, text=True)
         if "Validation Passed" in result.stdout:
             print(f"Validation Passed for {n} threads.")
+        elif "Validation Disabled" in result.stdout:
+            print(f"Validation Disabled (compiled out) for {n} threads.")
         else:
             print(f"WARNING: Validation FAILED for {n} threads!")
             print(result.stdout)
@@ -172,7 +199,7 @@ def generate_comparison_report(app_dir, thread_counts):
             
             if os.path.exists(stats_path):
                 stats = parse_stats_output(stats_path)
-                if stats['attempts'] > 0:
+                if isinstance(stats['attempts'], (int, float)) and stats['attempts'] > 0:
                     eff = (stats['successes'] / stats['attempts'] * 100)
                     eff_val = f"{eff:.2f}"
             

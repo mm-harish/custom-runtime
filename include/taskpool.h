@@ -48,17 +48,26 @@ template <typename FuncTy> struct alignas(64) TaskPool {
     return std::make_pair(&tasks[0], &tasks[1]);
   }
 
+  __attribute__((hot)) inline bool hasTwoFrames() {
+    return frontIndex < numframes - 1 || freePoolIndex >= 2;
+  }
+
   /**
    * @brief Gets two frames from the pool.
    * @return A pair of task pointers.
    */
   __attribute__((hot)) inline std::pair<TaskType *, TaskType *> getTwoFrames() {
-    if (frontIndex == numframes && freePoolIndex < 2) {
+    if (frontIndex >= numframes - 1 && freePoolIndex < 2) {
       return allocateTwoFrames();
     } else if (frontIndex < numframes - 1) {
       auto t = std::make_pair(front[frontIndex], front[frontIndex + 1]);
       frontIndex = frontIndex + 2;
       return t;
+    } else if (freePoolIndex >= 2) {
+      auto ret = std::make_pair(freePoolFront[freePoolIndex - 1],
+                                freePoolFront[freePoolIndex - 2]);
+      freePoolIndex -= 2;
+      return ret;
     }
     return std::make_pair(nullptr, nullptr);
   }

@@ -11,8 +11,7 @@
  * contention on the bus.
  */
 struct alignas(64) SpinLock {
-  std::atomic_flag flag =
-      ATOMIC_FLAG_INIT; ///< The atomic flag used for locking.
+  std::atomic<bool> locked{false}; ///< The atomic flag used for locking.
 
   /**
    * @brief Acquires the lock.
@@ -20,19 +19,22 @@ struct alignas(64) SpinLock {
    * Spins until the lock is acquired. Uses exponential backoff.
    */
   void lock() {
-    int spins = 128;
-    while (flag.test_and_set(std::memory_order_acquire)) {
-      for (int i = 0; i < spins; i++)
+    for (;;) {
+      // First: spin on shared reads
+      while (locked.load(std::memory_order_relaxed)) {
         _mm_pause();
-      if (spins < 1024)
-        spins *= 2;
+      }
+      // Then: attempt to acquire
+      if (!locked.exchange(true, std::memory_order_acquire)) {
+        return;
+      }
     }
   }
 
   /**
    * @brief Releases the lock.
    */
-  void unlock() { flag.clear(std::memory_order_release); }
+  void unlock() { locked.store(false, std::memory_order_release); }
 };
 
 #endif // SPINLOCK_H

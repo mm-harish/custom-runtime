@@ -6,10 +6,9 @@
 /**
  * @brief The Runtime class manages the worker threads and task execution.
  *
- * @tparam A The type of arguments for the tasks.
  * @tparam B The type of worker.
  */
-template <typename A, typename B> class Runtime {
+template <typename B> class Runtime {
 public:
   llvm::SmallVector<B *, 8> workers; ///< List of worker threads.
 
@@ -18,7 +17,7 @@ public:
    *
    * @param numThreads Number of worker threads to create.
    */
-  Runtime<A>(int numThreads);
+  Runtime(int numThreads);
 
   /**
    * @brief Start the runtime and execute tasks.
@@ -32,7 +31,7 @@ public:
 };
 
 // Generic template implementations
-template <typename A, typename B> Runtime<A, B>::Runtime(int numThreads) {
+template <typename B> Runtime<B>::Runtime(int numThreads) {
   for (int i = 0; i < numThreads; i++) {
     B *worker = new B(i);
     workers.push_back(worker);
@@ -43,14 +42,18 @@ template <typename A, typename B> Runtime<A, B>::Runtime(int numThreads) {
   }
 }
 
-template <typename A, typename B> void Runtime<A, B>::run() {
-  init();
+template <typename B> void Runtime<B>::run() {
   for (auto w : workers)
     w->start();
+
+  init();
   for (auto w : workers)
     w->join();
+
+#ifndef PERFORM_VALIDATION
   for (auto w : workers)
     w->printStats();
+#endif
 }
 
 #endif
